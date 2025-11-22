@@ -9,7 +9,7 @@ def predict_demand(hour, horizon_days):
     scaler_y = joblib.load("models/target_scaler.pkl")
     blend_weight = joblib.load("models/blend_weight.pkl")
     xgb_full = joblib.load("models/vmd_xgb_model.pkl")
-    lstm_full = tf.keras.models.load_model("models/vmd_lstm_model.h5")
+    lstm_full = tf.keras.models.load_model("models/vmd_lstm_model.h5", compile=False)
     SEQ_LEN = 168
 
     # Load data and build features (same as your training)
