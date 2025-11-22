@@ -1,16 +1,56 @@
-import streamlit as st
-from vmd_xg_lstm import predict_demand
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import numpy as np
+import pickle
+import joblib
+import tensorflow as tf
 
-st.title("India Region-wise Power Demand Forecast (VMD-XG-LSTM)")
+app = FastAPI()
 
-HOURS = [f"{h:02d}:00" for h in range(24)]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-hour = st.selectbox("Select Hour", options=HOURS)
-horizon = st.slider("Prediction Horizon (days)", min_value=1, max_value=31, value=30)
+# ---------- Load Models ----------
+xgb_model = pickle.load(open("models/vmd_xgb_model.pkl", "rb"))
+lstm_model = tf.keras.models.load_model("models/vmd_lstm_model.h5")
+feature_scaler = pickle.load(open("models/feature_scaler.pkl", "rb"))
+target_scaler = pickle.load(open("models/target_scaler.pkl", "rb"))
+blend_weight = pickle.load(open("models/blend_weight.pkl", "rb"))  # value 0-1
 
-if st.button("Predict"):
-    forecast = predict_demand(hour=hour, horizon_days=horizon)
-    st.subheader(f"National Demand Prediction at {hour} for Next {horizon} Days")
-    st.line_chart(forecast.set_index('timestamp')['demand'])
-    st.dataframe(forecast)
-    st.download_button("Download CSV", forecast.to_csv(index=False), "forecast.csv")
+# ---------- Prediction API ----------
+@app.post("/predict")
+def predict(payload: dict):
+    hour = payload["hour"]
+    region = payload["region"]
+
+    # Create 30 synthetic feature rows for next 30 days
+    X = np.array([[hour]] * 30)
+
+    # Scale input
+    X_scaled = feature_scaler.transform(X)
+
+    # Model predictions
+    pred_xgb = xgb_model.predict(X_scaled)
+    pred_lstm = lstm_model.predict(X_scaled).flatten()
+
+    # Blend
+    w = blend_weight
+    blended = (w * pred_lstm) + ((1 - w) * pred_xgb)
+
+    # Inverse scale
+    final_pred = target_scaler.inverse_transform(blended.reshape(-1, 1)).flatten()
+
+    # Round + output
+    output = []
+    for i, val in enumerate(final_pred):
+        output.append({
+            "day": i + 1,
+            "demand": max(0, round(float(val)))
+        })
+
+    return {"region": region, "forecast": output}
