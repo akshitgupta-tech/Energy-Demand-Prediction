@@ -4,5 +4,5 @@ numpy
 joblib
 scikit-learn
 xgboost
-tensorflow==2.11.0
+tensorflow
 openpyxl
