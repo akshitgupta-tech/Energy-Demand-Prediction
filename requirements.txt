@@ -1,8 +1,11 @@
-streamlit
-pandas
+fastapi
+uvicorn
 numpy
-joblib
+pandas
 scikit-learn
 xgboost
 tensorflow
-openpyxl
+joblib
+streamlit
+pydantic
+python-multipart
